@@ -1,0 +1,5 @@
+dist
+app/js/**/*.es6.js
+app/js/**/*.es6.js.map
+app/js/bower_components
+node_modules

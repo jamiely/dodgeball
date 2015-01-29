@@ -1,0 +1,18 @@
+<!DOCTYPE html>
+<html>
+  <body>
+    <div id="container"></div>
+    <!-- build:js js/all.js -->
+      <!-- bower:js -->
+      <script src="js/bower_components/phaser/build/phaser.js"></script>
+      <!-- endinject -->
+      <!-- inject:js -->
+      <script src="js/test.es6.js"></script>
+      <!-- endinject -->
+    <!-- endbuild -->
+    <script>
+      document.getElementById('container').innerHTML = x();
+    </script>
+  </body>
+</html>
+
