@@ -22,7 +22,9 @@ class PlayingState {
     this.inputHandler = new PlayingInputHandler(game);
     this.inputHandler.onKeyUp.add((key) => this.keys.push(key));
     this.playingField = this.createPlayingField(this.game);
-    this.selectedHero = this.newHero(game);
+    this.teams = this.playingField.bounds.map(
+      (bounds) => new Team(game, bounds));
+    this.selectedHero = this.teams[0].getTeamMembers()[0];
     this.ball = new Ball(game, 10, 10);
     game.add.existing(this.selectedHero);
     game.add.existing(this.ball);
@@ -134,39 +136,8 @@ class PlayingState {
     return value;
   }
 
-  onKeyUpHero(key) {
-    if(!this.selectedHero) return;
-
-    let K = Phaser.Keyboard;
-    let pt = (x, y) => new Phaser.Point(x, y);
-    let dirs = [K.UP, K.DOWN, K.LEFT, K.RIGHT];
-    let vm = 20
-    let velocities = [pt(0, -vm), pt(0, vm), pt(-vm, 0), pt(vm, 0)];
-    let mapping = _.zipObject(_.zip(dirs, velocities));
-
-    let velocity = mapping[key.keyCode];
-    console.log(key);
-    console.log(mapping);
-    let originalVelocity = this.selectedHero.body.velocity;
-    this.selectedHero.body.velocity.setTo(
-      originalVelocity.x + velocity.x,
-      originalVelocity.y + velocity.y);
-  }
-
-  newHero(game) {
-    if(! this.heroCounter) this.heroCounter = 1;
-    let h = new Hero(game, 100, 100);
-    h.name = `hero_${this.heroCounter}`;
-    //h.anchor.set(0.5, 0.5);
-    this.heros.add(h);
-    this.heroCounter ++;
-    return h;
-  }
-
   setupPhysics(game) {
     game.physics.startSystem(Phaser.Physics.ARCADE);
-    var heros = this.heros = game.add.group();
-    heros.enableBody = true;
   }
 
   createPlayingField(game) {
@@ -178,6 +149,34 @@ class PlayingState {
     game.add.existing(pf);
     return pf;
   }
+}
+
+class Team {
+  constructor(game, bounds) {
+    this.group = game.add.group();
+    this.bounds = bounds;
+    this.heroCounter = 0;
+
+    this.spawnPoint = new Phaser.Point(
+      bounds.x + 100, bounds.y + 100);
+
+    this.newTeamMember(game);
+  }
+
+  getTeamMembers() {
+    return this.group.children;
+  }
+
+  newTeamMember(game) {
+    if(! this.heroCounter) this.heroCounter = 1;
+    let h = new Hero(game, this.spawnPoint.x, this.spawnPoint.y);
+    h.name = `hero_${this.heroCounter}`;
+    //h.anchor.set(0.5, 0.5);
+    this.heroCounter ++;
+    this.group.add(h);
+    return h;
+  }
+
 }
 
 class PlayingInputHandler {
