@@ -2,16 +2,19 @@
 <html>
   <body>
     <div id="container"></div>
+    <div id="game"></div>
     <!-- build:js js/all.js -->
       <!-- bower:js -->
       <script src="js/bower_components/phaser/build/phaser.js"></script>
+      <script src="js/bower_components/lodash/lodash.js"></script>
       <!-- endinject -->
       <!-- inject:js -->
+      <script src="js/game.es6.js"></script>
       <script src="js/test.es6.js"></script>
       <!-- endinject -->
     <!-- endbuild -->
     <script>
-      document.getElementById('container').innerHTML = x();
+      new App().run();
     </script>
   </body>
 </html>
