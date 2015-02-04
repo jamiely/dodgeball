@@ -23,7 +23,9 @@ class PlayingState {
     this.inputHandler.onKeyUp.add((key) => this.keys.push(key));
     this.playingField = this.createPlayingField(this.game);
     this.selectedHero = this.newHero(game);
+    this.ball = new Ball(game, 10, 10);
     game.add.existing(this.selectedHero);
+    game.add.existing(this.ball);
     this.cursors = game.input.keyboard.createCursorKeys()
   }
 
@@ -45,6 +47,10 @@ class PlayingState {
     return x + width > bounds.x + bounds.width;
   }
 
+  playerTouchesBall(hero) {
+    return Phaser.Rectangle.intersects(hero, this.ball.body);
+  }
+
   checkInput() {
     this.keyVelocityMapping().forEach(([key, deltaVelocity]) => {
       if(! key.isDown) return;
@@ -54,6 +60,24 @@ class PlayingState {
         originalVelocity.x + deltaVelocity.x,
         originalVelocity.y + deltaVelocity.y);
     });
+  }
+
+  pickupBall(hero) {
+    hero.addChild(this.ball);
+  }
+
+  isBallHeld() {
+    return this.ball.parent !== this.game.world;
+  }
+
+  handleBall() {
+    if(this.isBallHeld()) return;
+
+    let h = this.selectedHero;
+    if(this.playerTouchesBall(h)) {
+      console.log('player touched ball');
+      this.pickupBall(h);
+    }
   }
 
   update() {
@@ -67,11 +91,16 @@ class PlayingState {
       let bounds = this.playingField.bounds[0];
       h.x = bounds.x + bounds.width - 2 * h.width;
     }
+
+    this.handleBall();
   }
 
   render() {
     this.game.debug.body(this.selectedHero);
     this.game.debug.spriteInfo(this.selectedHero, 32, 32);
+
+    //this.game.debug.body(this.ball);
+    this.game.debug.spriteInfo(this.ball, 32, 150);
   }
 
   applyDrag(sprite) {
@@ -128,8 +157,6 @@ class PlayingState {
     if(! this.heroCounter) this.heroCounter = 1;
     let h = new Hero(game, 100, 100);
     h.name = `hero_${this.heroCounter}`;
-    h.body.collideWorldBounds = true;
-    h.body.allowRotation = false;
     //h.anchor.set(0.5, 0.5);
     this.heros.add(h);
     this.heroCounter ++;
@@ -210,6 +237,30 @@ class PlayingField extends Phaser.Sprite {
   }
 }
 
+class Ball extends Phaser.Sprite {
+  constructor(...args) {
+    super(...args);
+    this.circleSize = 20;
+    this.graphics = this.createNewGraphics(this.circleSize);
+    //this.anchor.setTo(0.5, 0.5);
+    this.game.physics.enable(this, Phaser.Physics.ARCADE);
+    this.body.collideWorldBounds = true;
+    this.body.allowRotation = false;
+    this.body.width = this.circleSize;
+    this.body.height = this.circleSize;
+  }
+  createNewGraphics(circleSize) {
+    let g = this.game.add.graphics();
+    g.beginFill(0x0000ff, 1);
+    g.drawCircle(
+      circleSize / 2,
+      circleSize / 2,
+      circleSize);
+    this.addChild(g);
+    return g;
+  }
+}
+
 class Hero extends Phaser.Sprite {
   constructor(...args) {
     super(...args);
@@ -220,6 +271,8 @@ class Hero extends Phaser.Sprite {
     console.log(this.game);
     this.graphics = this.createNewGraphics(this.heroSize);
     this.game.physics.enable(this, Phaser.Physics.ARCADE);
+    this.body.collideWorldBounds = true;
+    this.body.allowRotation = false;
     this.body.width = this.heroSize.width;
     this.body.height = this.heroSize.height;
   }
