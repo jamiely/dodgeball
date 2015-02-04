@@ -21,7 +21,7 @@ class PlayingState {
 
     this.inputHandler = new PlayingInputHandler(game);
     this.inputHandler.onKeyUp.add((key) => this.keys.push(key));
-    this.createPlayingField(this.game);
+    this.playingField = this.createPlayingField(this.game);
     this.selectedHero = this.newHero(game);
     game.add.existing(this.selectedHero);
     this.cursors = game.input.keyboard.createCursorKeys()
@@ -36,6 +36,15 @@ class PlayingState {
     return _.zip(keys, velocities);
   }
 
+  isOutOfBounds(hero) {
+    var bounds = this.playingField.bounds[0];
+    let {x: x, y: y, width: width, height: height} = hero;
+    // for some reason this doesn't work
+    //return !Phaser.Rectangle.intersects(hero.body, bounds);
+
+    return x + width > bounds.x + bounds.width;
+  }
+
   checkInput() {
     this.keyVelocityMapping().forEach(([key, deltaVelocity]) => {
       if(! key.isDown) return;
@@ -48,9 +57,21 @@ class PlayingState {
   }
 
   update() {
-    this.applyDrag(this.selectedHero);
+    var h = this.selectedHero;
+    this.applyDrag(h);
     this.checkInput();
-    this.capVelocity(this.selectedHero);
+    this.capVelocity(h);
+
+    if(this.isOutOfBounds(h)) {
+      console.log('out of bounds');
+      let bounds = this.playingField.bounds[0];
+      h.x = bounds.x + bounds.width - 2 * h.width;
+    }
+  }
+
+  render() {
+    this.game.debug.body(this.selectedHero);
+    this.game.debug.spriteInfo(this.selectedHero, 32, 32);
   }
 
   applyDrag(sprite) {
@@ -107,11 +128,9 @@ class PlayingState {
     if(! this.heroCounter) this.heroCounter = 1;
     let h = new Hero(game, 100, 100);
     h.name = `hero_${this.heroCounter}`;
-    game.physics.enable(h, Phaser.Physics.ARCADE);
     h.body.collideWorldBounds = true;
-    h.body.bounce.setTo(0.3, 0.3);
     h.body.allowRotation = false;
-    h.anchor.set(0.5, 0.5);
+    //h.anchor.set(0.5, 0.5);
     this.heros.add(h);
     this.heroCounter ++;
     return h;
@@ -128,7 +147,9 @@ class PlayingState {
       width: game.world.width,
       height: game.world.height
     };
-    game.add.existing(new PlayingField(playingFieldDimensions, game, 0, 0));
+    let pf = new PlayingField(playingFieldDimensions, game, 0, 0);
+    game.add.existing(pf);
+    return pf;
   }
 }
 
@@ -168,9 +189,22 @@ class PlayingField extends Phaser.Sprite {
     g.lineStyle(lineWidth, lineColor, 1);
     g.beginFill(fieldColor, 1);
     // left
-    g.drawRect(linePadding, linePadding, middleX, this.dimensions.height - lineWidth);
-    // right
-    g.drawRect(middleX - linePadding, linePadding, middleX, this.dimensions.height - lineWidth);
+    this.bounds = [{
+      x: linePadding,
+      y: linePadding,
+      width: middleX,
+      height: this.dimensions.height - lineWidth
+    }, {
+      x: middleX - linePadding,
+      y: linePadding,
+      width: middleX,
+      height: this.dimensions.height - lineWidth
+    }];
+    this.bounds.forEach(({x: x, y: y, width: w, height: h}) =>
+                        g.drawRect(x, y, w, h));
+    //g.drawRect(linePadding, linePadding, middleX, this.dimensions.height - lineWidth);
+    //// right
+    //g.drawRect(middleX - linePadding, linePadding, middleX, this.dimensions.height - lineWidth);
 
     return g;
   }
@@ -185,6 +219,9 @@ class Hero extends Phaser.Sprite {
     };
     console.log(this.game);
     this.graphics = this.createNewGraphics(this.heroSize);
+    this.game.physics.enable(this, Phaser.Physics.ARCADE);
+    this.body.width = this.heroSize.width;
+    this.body.height = this.heroSize.height;
   }
 
   createNewGraphics(size) {
