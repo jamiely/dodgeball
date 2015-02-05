@@ -19,8 +19,6 @@ class PlayingState {
 
     this.keys = [];
 
-    this.inputHandler = new PlayingInputHandler(game);
-    this.inputHandler.onKeyUp.add((key) => this.keys.push(key));
     this.playingField = this.createPlayingField(this.game);
     this.teams = this.playingField.bounds.map(
       (bounds) => new Team(game, bounds));
@@ -29,6 +27,7 @@ class PlayingState {
     game.add.existing(this.selectedHero);
     game.add.existing(this.ball);
     this.cursors = game.input.keyboard.createCursorKeys()
+    this.throwKey = game.input.keyboard.addKey(Phaser.Keyboard.X);
   }
 
   keyVelocityMapping() {
@@ -41,7 +40,7 @@ class PlayingState {
   }
 
   isOutOfBounds(hero) {
-    var bounds = this.playingField.bounds[0];
+    var bounds = this.playingField.bounds[0].bounds;
     let {x: x, y: y, width: width, height: height} = hero;
     // for some reason this doesn't work
     //return !Phaser.Rectangle.intersects(hero.body, bounds);
@@ -64,21 +63,30 @@ class PlayingState {
     });
   }
 
-  pickupBall(hero) {
-    hero.addChild(this.ball);
-  }
-
   isBallHeld() {
     return this.ball.parent !== this.game.world;
   }
 
   handleBall() {
-    if(this.isBallHeld()) return;
+    if(this.isBallHeld()) {
+      if(this.throwKey.isDown) {
+        this.selectedHero.throwBall();
+      }
+      return;
+    }
+
+    if(this.ball.isThrown) {
+      let vel = this.ball.thrownVelocity;
+      this.ball.body.velocity.setTo(vel.x, vel.y);
+      return;
+    }
+
+    // ball not held
 
     let h = this.selectedHero;
     if(this.playerTouchesBall(h)) {
       console.log('player touched ball');
-      this.pickupBall(h);
+      h.pickupBall(this.ball);
     }
   }
 
@@ -90,7 +98,7 @@ class PlayingState {
 
     if(this.isOutOfBounds(h)) {
       console.log('out of bounds');
-      let bounds = this.playingField.bounds[0];
+      let bounds = this.playingField.bounds[0].bounds;
       h.x = bounds.x + bounds.width - 2 * h.width;
     }
 
@@ -101,7 +109,7 @@ class PlayingState {
     this.game.debug.body(this.selectedHero);
     this.game.debug.spriteInfo(this.selectedHero, 32, 32);
 
-    //this.game.debug.body(this.ball);
+    this.game.debug.body(this.ball);
     this.game.debug.spriteInfo(this.ball, 32, 150);
   }
 
@@ -152,11 +160,12 @@ class PlayingState {
 }
 
 class Team {
-  constructor(game, bounds) {
+  constructor(game, fieldBounds) {
     this.group = game.add.group();
-    this.bounds = bounds;
+    this.fieldBounds = fieldBounds;
     this.heroCounter = 0;
 
+    let bounds = fieldBounds.bounds;
     this.spawnPoint = new Phaser.Point(
       bounds.x + 100, bounds.y + 100);
 
@@ -169,7 +178,7 @@ class Team {
 
   newTeamMember(game) {
     if(! this.heroCounter) this.heroCounter = 1;
-    let h = new Hero(game, this.spawnPoint.x, this.spawnPoint.y);
+    let h = new Hero(this, game, this.spawnPoint.x, this.spawnPoint.y);
     h.name = `hero_${this.heroCounter}`;
     //h.anchor.set(0.5, 0.5);
     this.heroCounter ++;
@@ -179,20 +188,20 @@ class Team {
 
 }
 
-class PlayingInputHandler {
-  constructor(game) {
-    var addKey = (key) => game.input.keyboard.addKey(key);
+class PlayingFieldBounds {
+  constructor(bounds, otherFieldBounds) {
+    this.bounds = bounds;
+    this.otherFieldBounds = otherFieldBounds;
+  }
 
-    var K = Phaser.Keyboard;
-
-    var onKeyUp = this.onKeyUp = new Phaser.Signal();
-
-    [K.LEFT, K.RIGHT, K.UP, K.DOWN].forEach((k) =>
-      addKey(k).onUp.add((code) => {
-        console.log(code);
-        onKeyUp.dispatch(code);
-      })
-    );
+  setOtherFieldBounds(value) {
+    this.otherFieldBounds = value;
+    // will be positive or negative
+    let x = this.otherFieldBounds.bounds.x - this.bounds.x;
+    this.ballDirection = new Phaser.Point(
+      x / Math.abs(x),
+      0);
+    console.log(this.ballDirection);
   }
 }
 
@@ -215,7 +224,7 @@ class PlayingField extends Phaser.Sprite {
     g.lineStyle(lineWidth, lineColor, 1);
     g.beginFill(fieldColor, 1);
     // left
-    this.bounds = [{
+    var simpleBounds = [{
       x: linePadding,
       y: linePadding,
       width: middleX,
@@ -226,7 +235,11 @@ class PlayingField extends Phaser.Sprite {
       width: middleX,
       height: this.dimensions.height - lineWidth
     }];
-    this.bounds.forEach(({x: x, y: y, width: w, height: h}) =>
+    this.bounds = simpleBounds.map((b) => new PlayingFieldBounds(b));
+    this.bounds[0].setOtherFieldBounds(this.bounds[1]);
+    this.bounds[1].setOtherFieldBounds(this.bounds[0]);
+
+    simpleBounds.forEach(({x: x, y: y, width: w, height: h}) =>
                         g.drawRect(x, y, w, h));
     //g.drawRect(linePadding, linePadding, middleX, this.dimensions.height - lineWidth);
     //// right
@@ -239,7 +252,7 @@ class PlayingField extends Phaser.Sprite {
 class Ball extends Phaser.Sprite {
   constructor(...args) {
     super(...args);
-    this.circleSize = 20;
+    this.circleSize = 40;
     this.graphics = this.createNewGraphics(this.circleSize);
     //this.anchor.setTo(0.5, 0.5);
     this.game.physics.enable(this, Phaser.Physics.ARCADE);
@@ -250,7 +263,7 @@ class Ball extends Phaser.Sprite {
   }
   createNewGraphics(circleSize) {
     let g = this.game.add.graphics();
-    g.beginFill(0x0000ff, 1);
+    g.beginFill(0xffffff, 1);
     g.drawCircle(
       circleSize / 2,
       circleSize / 2,
@@ -258,11 +271,29 @@ class Ball extends Phaser.Sprite {
     this.addChild(g);
     return g;
   }
+
+  throw(x, y, velocity) {
+    if(this.parent === this.game.world) {
+      console.log('cannot throw because no one is holding ball');
+      return;
+    }
+    console.log({
+      what: 'throw',
+      velocity: velocity
+    });
+    // put it back in the playing field
+    this.game.add.existing(this);
+    this.x = x;
+    this.y = y;
+    this.isThrown = true;
+    this.thrownVelocity = velocity;
+  }
 }
 
 class Hero extends Phaser.Sprite {
-  constructor(...args) {
+  constructor(team, ...args) {
     super(...args);
+    this.team = team;
     this.heroSize = {
       width: 50,
       height: 80
@@ -274,6 +305,42 @@ class Hero extends Phaser.Sprite {
     this.body.allowRotation = false;
     this.body.width = this.heroSize.width;
     this.body.height = this.heroSize.height;
+    this.hasBall = false;
+    this.ball = null;
+  }
+
+  pickupBall(ball) {
+    this.hasBall = true;
+    this.ball = ball;
+    this.addChild(ball);
+  }
+
+  getBallDirection() {
+    return this.team.fieldBounds.ballDirection;
+  }
+
+  throwBall() {
+    if(!this.ball) {
+      console.log('player doesnt have ball');
+      return;
+    }
+    console.log('player throws ball');
+
+    let ball = this.ball;
+    this.ball = null;
+
+    let sign = this.getBallDirection().x;
+    let vx = sign > 0 ? Math.max(this.body.velocity.x, 0):
+                        Math.min(this.body.velocity.x, 0);
+    let ballSpeed = 100
+    let magnitude = vx + ballSpeed
+
+    // ball should move towards the direction of play
+    ball.throw(this.x + 2 * this.width * this.getBallDirection().x, this.y,
+               new Phaser.Point().copyFrom(this.getBallDirection()).
+                 setMagnitude(vx + 50));
+
+    this.hasBall = false;
   }
 
   createNewGraphics(size) {
