@@ -18,8 +18,8 @@ do this. Files are put into `dist`.
 Development
 ===========
 
-For development purposes including live-reload, you can use
-`gulp watch`.
+For development purposes you can use `gulp watch` for live building, and
+`gulp connect` for live-reload.
 
 ## Vim Setup
 

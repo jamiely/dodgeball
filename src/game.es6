@@ -24,10 +24,17 @@ class PlayingState {
       (bounds) => new Team(game, bounds));
     this.selectedHero = this.teams[0].getTeamMembers()[0];
     this.ball = new Ball(game, 10, 10);
-    game.add.existing(this.selectedHero);
     game.add.existing(this.ball);
     this.cursors = game.input.keyboard.createCursorKeys()
     this.throwKey = game.input.keyboard.addKey(Phaser.Keyboard.X);
+
+    // the last player to touch the ball
+    this.lastPlayerToTouchBall = null;
+  }
+
+  getPlayers() {
+    return this.teams.map((m) => m.getTeamMembers()).
+      reduce((mem, a) => mem.concat(a));
   }
 
   keyVelocityMapping() {
@@ -86,7 +93,7 @@ class PlayingState {
     let h = this.selectedHero;
     if(this.playerTouchesBall(h)) {
       console.log('player touched ball');
-      h.pickupBall(this.ball);
+      this.havePlayerPickupBall(h);
     }
   }
 
@@ -103,6 +110,48 @@ class PlayingState {
     }
 
     this.handleBall();
+
+    this.checkCollisions();
+  }
+
+  checkCollisions() {
+    let players = this.getPlayers();
+
+    let collideCallback = (player, ball) =>
+      console.log({
+        what: 'collision',
+        player: player,
+        ball: ball
+      });
+
+    let processCallback = (player, ball) => {
+      if(this.isBallHeld(ball)) {
+        console.log('ball cannot collide while being held');
+        return false;
+      }
+
+      console.log(player);
+      console.log(this.lastPlayerToTouchBall);
+      if(player === this.lastPlayerToTouchBall) {
+        console.log('ball cannot collide with last player to touch ball');
+        return false;
+      }
+
+      this.havePlayerPickupBall(player);
+      return false;
+    };
+
+    players.forEach( (p) =>
+      this.game.physics.arcade.collide(
+        p,
+        this.ball,
+        collideCallback,
+        processCallback));
+  }
+
+  havePlayerPickupBall(player) {
+    player.pickupBall(this.ball);
+    this.lastPlayerToTouchBall = player;
   }
 
   render() {
@@ -313,6 +362,10 @@ class Hero extends Phaser.Sprite {
     this.hasBall = true;
     this.ball = ball;
     this.addChild(ball);
+
+    this.ball.x = 0;
+    this.ball.y = 0;
+    this.ball.body.velocity.setTo(0, 0);
   }
 
   getBallDirection() {
@@ -332,8 +385,8 @@ class Hero extends Phaser.Sprite {
     let sign = this.getBallDirection().x;
     let vx = sign > 0 ? Math.max(this.body.velocity.x, 0):
                         Math.min(this.body.velocity.x, 0);
-    let ballSpeed = 100
-    let magnitude = vx + ballSpeed
+    let ballSpeed = 100;
+    let magnitude = vx + ballSpeed;
 
     // ball should move towards the direction of play
     ball.throw(this.x + 2 * this.width * this.getBallDirection().x, this.y,
